@@ -216,7 +216,7 @@ impl Response {
             }
             404 => {
                 self.status_code = 404;
-                self.status_verb = String::from("Not found");
+                self.status_verb = String::from("Not Found");
             }
             _ => {
                 self.status_code = status;
