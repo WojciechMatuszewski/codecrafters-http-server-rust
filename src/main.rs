@@ -1,3 +1,6 @@
+use std::fs::read_to_string;
+use std::path::PathBuf;
+
 use server::Response;
 use server::Server;
 
@@ -34,6 +37,26 @@ fn main() -> anyhow::Result<()> {
                 .build();
 
             return response;
+        })
+        .get("/files/:filename", |matched_request| {
+            let filename = matched_request.parameters.get("filename").unwrap();
+            let path = PathBuf::from(format!("/tmp/{filename}"));
+
+            if let Ok(file_contents) = read_to_string(path) {
+                let response = Response::new()
+                    .status(200)
+                    .content_type("application/octet-stream")
+                    .body(&file_contents)
+                    .build();
+
+                return response;
+            } else {
+                let response = Response::new()
+                    .status(404)
+                    .content_type("text/plain")
+                    .build();
+                return response;
+            }
         })
         .run()?;
 
