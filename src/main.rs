@@ -43,7 +43,7 @@ fn main() -> anyhow::Result<()> {
             let filename = matched_request.parameters.get("filename").unwrap();
 
             let args: Vec<String> = env::args().collect();
-            let file_directory = args.get(1).unwrap();
+            let file_directory = args.get(2).unwrap();
 
             let path = PathBuf::from(format!("/{file_directory}/{filename}"));
             match read_to_string(path) {
@@ -56,7 +56,9 @@ fn main() -> anyhow::Result<()> {
 
                     return response;
                 }
-                Err(_) => {
+                Err(error) => {
+                    println!("{error} {file_directory}");
+
                     let response = Response::new()
                         .status(404)
                         .content_type("text/plain")
