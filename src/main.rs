@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
             } else {
                 let response = Response::new()
                     .status(404)
-                    .content_type("text/plain")
+                    .content_type("application/octet-stream")
                     .build();
                 return response;
             }
