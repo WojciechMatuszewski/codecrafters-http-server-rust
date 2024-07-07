@@ -24,6 +24,17 @@ fn main() -> anyhow::Result<()> {
                 .build();
             return response;
         })
+        .get("/user-agent", |matched_request| {
+            let user_agent = matched_request.headers.get("User-Agent").unwrap();
+
+            let response = Response::new()
+                .status(200)
+                .content_type("text/plain")
+                .body(&user_agent)
+                .build();
+
+            return response;
+        })
         .run()?;
 
     return Ok(());
