@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
 
                     return response;
                 }
-                Err(error) => {
+                Err(_) => {
                     let response = Response::new()
                         .status(404)
                         .content_type("text/plain")
