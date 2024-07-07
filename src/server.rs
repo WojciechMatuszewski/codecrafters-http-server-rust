@@ -238,6 +238,9 @@ impl Response {
     pub fn body(&mut self, body: &str) -> &mut Self {
         self.body = Some(body.to_string());
 
+        self.headers
+            .insert("Content-Length".to_string(), format!("{}", body.len()));
+
         return self;
     }
 
