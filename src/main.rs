@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
@@ -40,7 +41,11 @@ fn main() -> anyhow::Result<()> {
         })
         .get("/files/:filename", |matched_request| {
             let filename = matched_request.parameters.get("filename").unwrap();
-            let path = PathBuf::from(format!("/tmp/{filename}"));
+
+            let args: Vec<String> = env::args().collect();
+            let file_directory = args.get(1).unwrap();
+
+            let path = PathBuf::from(format!("/{file_directory}/{filename}"));
             match read_to_string(path) {
                 Ok(file_content) => {
                     let response = Response::new()
