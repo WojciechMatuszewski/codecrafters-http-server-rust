@@ -267,7 +267,7 @@ impl fmt::Display for Response {
                 response.push_str(format!("{}:{}\r\n", header.0, header.1).as_str())
             });
 
-            response.push_str("\r\n");
+            response.push_str("\r");
         }
 
         if let Some(body) = &self.body {
