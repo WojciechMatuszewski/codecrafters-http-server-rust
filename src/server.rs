@@ -205,7 +205,7 @@ impl Response {
             status_code: 404,
             status_verb: String::from("Not Found"),
             headers: HashMap::new(),
-            body: Some(String::from("Not Found")),
+            body: None,
         };
     }
 
