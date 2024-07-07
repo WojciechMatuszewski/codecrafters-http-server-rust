@@ -103,7 +103,7 @@ impl Request {
                 .iter()
                 .fold(HashMap::new(), |mut headers, bar| {
                     if let Some((key, value)) = bar.split_once(":") {
-                        headers.insert(key.to_string(), value.to_string());
+                        headers.insert(key.to_string(), value.trim().to_string());
                     }
 
                     return headers;
