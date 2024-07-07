@@ -274,54 +274,27 @@ impl fmt::Display for Response {
             response.push_str(body.as_str());
         }
 
+        response.push_str("\r\n");
+
         return f.write_str(response.as_str());
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use nom::InputTake;
-
-    fn get_parameters(defined_path: &str, incoming_path: &str) -> HashMap<String, String> {
-        let parameters: HashMap<String, String> = HashMap::new();
-
-        return parameters;
-    }
+    use super::*;
 
     #[test]
     fn it_works() {
-        let defined_path = "/foo/:userId";
-        let incoming_path = "/foo/123";
-
-        let incoming_path_parts: Vec<&str> = incoming_path
-            .split_terminator("/")
-            .filter(|path_part| return path_part.len() > 0)
-            .collect();
-
-        let parameters: HashMap<String, String> = defined_path
-            .split_terminator("/")
-            .filter(|path_part| return path_part.len() > 0)
-            .enumerate()
-            .fold(HashMap::new(), |mut acc, (index, path_part)| {
-                if !path_part.starts_with(":") {
-                    return acc;
-                }
-
-                let Some(parameter_value) = incoming_path_parts.get(index) else {
-                    return acc;
-                };
-
-                let parameter_key = &path_part[1..];
-                acc.insert(parameter_key.to_string(), parameter_value.to_string());
-
-                return acc;
-            });
-
-        assert_eq!(
-            parameters.get("userId").unwrap().to_string(),
-            "123".to_string()
-        )
+        let response = Response::new();
+        // let parsed_response = format!("{}", response);
+        // let x = format!("{response}");
+        // for (index, ch) in x.chars().enumerate() {
+        //     if index == 1 {
+        //         println!("{}", ch);
+        //         break;
+        //     }
+        // }
+        print!("{:?}", format!("{response}"));
     }
 }
