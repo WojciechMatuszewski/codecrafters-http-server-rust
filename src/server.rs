@@ -122,32 +122,33 @@ impl Request {
             return None;
         }
 
-        let contains_parameters = route.path.contains(":");
-        if !contains_parameters {
-            let exact_match = route.path.to_lowercase() == self.path.to_lowercase();
-            if exact_match {
-                return Some(MatchedRequest {
-                    headers: self.headers.to_owned(),
-                    method: self.method.to_owned(),
-                    path: self.path.to_owned(),
-                    parameters: HashMap::new(),
-                });
+        match route.path.contains("/:") {
+            true => {
+                if let Some(parameters) = get_parameters(&route.path, &self.path) {
+                    return Some(MatchedRequest {
+                        headers: self.headers.to_owned(),
+                        method: self.method.to_owned(),
+                        path: self.path.to_owned(),
+                        parameters: parameters,
+                    });
+                }
+
+                return None;
             }
+            false => {
+                let exact_match = route.path == self.path;
+                if exact_match {
+                    return Some(MatchedRequest {
+                        headers: self.headers.to_owned(),
+                        method: self.method.to_owned(),
+                        path: self.path.to_owned(),
+                        parameters: HashMap::new(),
+                    });
+                }
 
-            return None;
+                return None;
+            }
         }
-
-        let parameters = get_parameters(&route.path, &self.path);
-        if let Some(parameters) = parameters {
-            return Some(MatchedRequest {
-                headers: self.headers.to_owned(),
-                method: self.method.to_owned(),
-                path: self.path.to_owned(),
-                parameters: parameters,
-            });
-        }
-
-        return None;
     }
 }
 
@@ -166,28 +167,26 @@ fn get_parameters(defined_path: &str, request_path: &str) -> Option<HashMap<Stri
         return None;
     }
 
-    let expected_num_parameters = defined_path_parts
-        .iter()
-        .filter(|defined_part| return defined_part.starts_with(":"))
-        .count();
-
     let incoming = request_path_parts.iter();
     let defined = defined_path_parts.iter();
 
     let mut parameters: HashMap<String, String> = HashMap::new();
 
     for (incoming_part, defined_part) in izip!(incoming, defined) {
-        if defined_part.starts_with(":") {
-            let defined_part = &defined_part[1..];
-
-            parameters.insert(defined_part.to_string(), incoming_part.to_string());
+        match defined_part.starts_with(":") {
+            true => {
+                let defined_part = &defined_part[1..];
+                parameters.insert(defined_part.to_string(), incoming_part.to_string());
+            }
+            false => {
+                if incoming_part != defined_part {
+                    return None;
+                }
+            }
         }
     }
 
-    if parameters.len() != expected_num_parameters {
-        return None;
-    }
-
+    println!("returning parameters");
     return Some(parameters);
 }
 
