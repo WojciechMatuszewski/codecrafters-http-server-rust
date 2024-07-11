@@ -59,11 +59,11 @@ impl Server {
             });
 
             if let Some((route, matched_request)) = matched_request.into_inner() {
-                let response = (route.responder)(matched_request);
-                stream.write_all(format!("{response}").as_bytes())?
+                let mut response = (route.responder)(matched_request);
+                stream.write_all(response.prepare(&request).as_bytes())?
             } else {
-                let response = Response::new();
-                stream.write_all(format!("{response}").as_bytes())?
+                let mut response = Response::new();
+                stream.write_all(response.prepare(&request).as_bytes())?
             }
         }
 
@@ -270,11 +270,27 @@ impl Response {
     pub fn build(&self) -> Self {
         return Response {
             status_code: self.status_code,
-
             status_verb: self.status_verb.to_owned(),
             body: self.body.to_owned(),
             headers: self.headers.to_owned(),
         };
+    }
+
+    #[allow(private_interfaces)]
+    pub fn prepare(&mut self, request: &Request) -> String {
+        let Some(encoding) = request.headers.get("Accept-Encoding") else {
+            return format!("${self}");
+        };
+
+        match encoding.as_str() {
+            "gzip" => {
+                self.headers
+                    .insert("Content-Encoding".to_string(), "gzip".to_string());
+
+                return format!("${self}");
+            }
+            _ => return format!("${self}"),
+        }
     }
 }
 
@@ -287,7 +303,7 @@ impl fmt::Display for Response {
 
         if self.headers.len() > 0 {
             self.headers.iter().for_each(|header| {
-                response.push_str(format!("{}:{}\r\n", header.0, header.1).as_str())
+                response.push_str(format!("{}: {}\r\n", header.0, header.1).as_str())
             });
 
             response.push_str("\r\n");
