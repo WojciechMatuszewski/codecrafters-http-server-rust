@@ -279,7 +279,7 @@ impl Response {
     #[allow(private_interfaces)]
     pub fn prepare(&mut self, request: &Request) -> String {
         let Some(encoding) = request.headers.get("Accept-Encoding") else {
-            return format!("${self}");
+            return format!("{self}");
         };
 
         match encoding.as_str() {
@@ -287,9 +287,9 @@ impl Response {
                 self.headers
                     .insert("Content-Encoding".to_string(), "gzip".to_string());
 
-                return format!("${self}");
+                return format!("{self}");
             }
-            _ => return format!("${self}"),
+            _ => return format!("{self}"),
         }
     }
 }
