@@ -30,12 +30,25 @@ impl Server {
 
         return self;
     }
+
+    pub fn post(&mut self, path: &str, responder: fn(MatchedRequest) -> Response) -> &mut Self {
+        self.routes.push(Route {
+            path: path.to_string(),
+            method: "post".to_string(),
+            responder,
+        });
+
+        return self;
+    }
+
     pub fn run(&self) -> anyhow::Result<()> {
         let listener = TcpListener::bind(self.address.clone())?;
         for stream in listener.incoming() {
             let mut stream = stream?;
 
+            println!("returning response");
             let request = Request::new(&stream)?;
+            println!("returning response");
 
             let matched_request = self.routes.iter().fold_while(None, |_, route| {
                 if let Some(matched_request) = request.match_route(route) {
@@ -72,6 +85,7 @@ struct Request {
     headers: HashMap<String, String>,
     path: String,
     protocol: String,
+    body: Option<String>,
 }
 
 pub struct MatchedRequest {
@@ -79,41 +93,46 @@ pub struct MatchedRequest {
     pub method: String,
     pub headers: HashMap<String, String>,
     pub parameters: HashMap<String, String>,
+    pub body: Option<String>,
 }
 
 impl Request {
     pub fn new(stream: &TcpStream) -> anyhow::Result<Self> {
-        let reader = BufReader::new(stream);
+        let mut reader = BufReader::new(stream);
+        let raw_data = String::from_utf8(reader.fill_buf()?.to_vec())?;
 
-        let mut raw_data = reader
-            .lines()
-            .map(|result| result.unwrap())
-            .take_while(|line| !line.is_empty());
+        let mut request_data = raw_data.lines();
 
-        let request_data = raw_data.next().unwrap();
-        let headers_data: Vec<String> = raw_data.collect();
-
-        let request_data_parts = request_data.split(" ").take(3).collect::<Vec<_>>();
+        let request_info = request_data.next().unwrap();
+        let request_data_parts = request_info.split(" ").take(3).collect::<Vec<_>>();
         let [method, path, protocol] = request_data_parts.as_slice() else {
             anyhow::bail!("Failed to extract data")
         };
 
-        let headers: HashMap<String, String> =
-            headers_data
-                .iter()
-                .fold(HashMap::new(), |mut headers, bar| {
-                    if let Some((key, value)) = bar.split_once(":") {
-                        headers.insert(key.to_string(), value.trim().to_string());
-                    }
+        let mut headers: HashMap<String, String> = HashMap::new();
+        loop {
+            let request_header = request_data.next().unwrap();
+            if request_header.is_empty() {
+                break;
+            }
 
-                    return headers;
-                });
+            let (key, value) = request_header
+                .split_once(":")
+                .expect("Failed to parse header");
+
+            headers.insert(key.to_string(), value.trim().to_string());
+        }
+
+        let request_body = request_data.next().map(|body| body.to_owned());
+
+        reader.consume(raw_data.len());
 
         return Ok(Self {
             method: method.to_string(),
             path: path.to_string(),
             protocol: protocol.to_string(),
-            headers,
+            headers: headers,
+            body: request_body,
         });
     }
 
@@ -130,6 +149,7 @@ impl Request {
                         method: self.method.to_owned(),
                         path: self.path.to_owned(),
                         parameters: parameters,
+                        body: self.body.to_owned(),
                     });
                 }
 
@@ -142,6 +162,7 @@ impl Request {
                         headers: self.headers.to_owned(),
                         method: self.method.to_owned(),
                         path: self.path.to_owned(),
+                        body: self.body.to_owned(),
                         parameters: HashMap::new(),
                     });
                 }
@@ -186,7 +207,6 @@ fn get_parameters(defined_path: &str, request_path: &str) -> Option<HashMap<Stri
         }
     }
 
-    println!("returning parameters");
     return Some(parameters);
 }
 
@@ -213,6 +233,10 @@ impl Response {
             200 => {
                 self.status_code = 200;
                 self.status_verb = String::from("OK");
+            }
+            201 => {
+                self.status_code = 201;
+                self.status_verb = String::from("Created")
             }
             404 => {
                 self.status_code = 404;

@@ -1,5 +1,7 @@
 use std::env;
 use std::fs::read_to_string;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 
 use server::Response;
@@ -26,6 +28,7 @@ fn main() -> anyhow::Result<()> {
                 .content_type("text/plain")
                 .body(param)
                 .build();
+
             return response;
         })
         .get("/user-agent", |matched_request| {
@@ -67,6 +70,19 @@ fn main() -> anyhow::Result<()> {
                     return response;
                 }
             }
+        })
+        .post("/files/:filename", |matched_request| {
+            let filename = matched_request.parameters.get("filename").unwrap();
+            let args: Vec<String> = env::args().collect();
+            let file_directory = args.get(2).unwrap();
+            let path = PathBuf::from(format!("/{file_directory}/{filename}"));
+
+            let request_body = matched_request.body.unwrap();
+            let mut file = File::create(path).unwrap();
+            file.write_all(request_body.as_bytes()).unwrap();
+
+            let response = Response::new().status(201).build();
+            return response;
         })
         .run()?;
 
