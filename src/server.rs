@@ -281,21 +281,21 @@ impl Response {
             return Ok(());
         };
 
-        // let is_gzip_encoding = encoding_header
-        //     .split(",")
-        //     .fold_while(false, |_, value| {
-        //         if value.trim() == "gzip" {
-        //             return itertools::FoldWhile::Done(true);
-        //         }
+        let is_gzip_encoding = encoding_header
+            .split(",")
+            .fold_while(false, |_, value| {
+                if value.trim() == "gzip" {
+                    return itertools::FoldWhile::Done(true);
+                }
 
-        //         return itertools::FoldWhile::Continue(false);
-        //     })
-        //     .into_inner();
+                return itertools::FoldWhile::Continue(false);
+            })
+            .into_inner();
 
-        // if is_gzip_encoding {
-        self.headers
-            .insert("Content-Encoding".to_string(), "gzip".to_string());
-        // };
+        if is_gzip_encoding {
+            self.headers
+                .insert("Content-Encoding".to_string(), "gzip".to_string());
+        };
 
         stream.write_all(format!("{self}").as_bytes())?;
         return Ok(());
