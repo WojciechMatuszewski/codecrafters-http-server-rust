@@ -14,10 +14,7 @@ static ADDR: &str = "127.0.0.1:4221";
 fn main() -> anyhow::Result<()> {
     Server::new(ADDR)
         .get("/", |_| {
-            let response = Response::new()
-                .status(200)
-                .content_type("text/plain")
-                .build();
+            let response = Response::new().status(200).build();
             return response;
         })
         .get("/echo/:str", |matched_request| {

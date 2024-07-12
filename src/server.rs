@@ -276,6 +276,7 @@ impl Response {
 
     pub fn send(&mut self, stream: &mut TcpStream, request: &Request) -> anyhow::Result<()> {
         let Some(encoding_header) = request.headers.get("Accept-Encoding") else {
+            println!("{:?}", format!("{self}"));
             stream.write_all(format!("{self}").as_bytes())?;
             return Ok(());
         };
