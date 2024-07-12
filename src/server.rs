@@ -46,9 +46,7 @@ impl Server {
         for stream in listener.incoming() {
             let mut stream = stream?;
 
-            println!("returning response");
             let request = Request::new(&stream)?;
-            println!("returning response");
 
             let matched_request = self.routes.iter().fold_while(None, |_, route| {
                 if let Some(matched_request) = request.match_route(route) {
@@ -60,10 +58,10 @@ impl Server {
 
             if let Some((route, matched_request)) = matched_request.into_inner() {
                 let mut response = (route.responder)(matched_request);
-                stream.write_all(response.prepare(&request).as_bytes())?
+                response.send(&mut stream, &request)?;
             } else {
                 let mut response = Response::new();
-                stream.write_all(response.prepare(&request).as_bytes())?
+                response.send(&mut stream, &request)?;
             }
         }
 
@@ -72,7 +70,7 @@ impl Server {
 }
 
 #[derive(Debug)]
-struct Route {
+pub struct Route {
     path: String,
     method: String,
     responder: fn(MatchedRequest) -> Response,
@@ -80,7 +78,7 @@ struct Route {
 
 #[allow(unused, dead_code)]
 #[derive(Debug)]
-struct Request {
+pub struct Request {
     method: String,
     headers: HashMap<String, String>,
     path: String,
@@ -276,21 +274,30 @@ impl Response {
         };
     }
 
-    #[allow(private_interfaces)]
-    pub fn prepare(&mut self, request: &Request) -> String {
-        let Some(encoding) = request.headers.get("Accept-Encoding") else {
-            return format!("{self}");
+    pub fn send(&mut self, stream: &mut TcpStream, request: &Request) -> anyhow::Result<()> {
+        let Some(encoding_header) = request.headers.get("Accept-Encoding") else {
+            stream.write_all(format!("{self}").as_bytes())?;
+            return Ok(());
         };
 
-        match encoding.as_str() {
-            "gzip" => {
-                self.headers
-                    .insert("Content-Encoding".to_string(), "gzip".to_string());
+        let is_gzip_encoding = encoding_header
+            .split(",")
+            .fold_while(false, |_, value| {
+                if value.trim() == "gzip" {
+                    return itertools::FoldWhile::Done(true);
+                }
 
-                return format!("{self}");
-            }
-            _ => return format!("{self}"),
-        }
+                return itertools::FoldWhile::Continue(false);
+            })
+            .into_inner();
+
+        if is_gzip_encoding {
+            self.headers
+                .insert("Content-Encoding".to_string(), "gzip".to_string());
+        };
+
+        stream.write_all(format!("{self}").as_bytes())?;
+        return Ok(());
     }
 }
 
