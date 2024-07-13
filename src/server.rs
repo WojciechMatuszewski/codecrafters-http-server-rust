@@ -294,8 +294,8 @@ impl Response {
         let is_gzip_encoding = request
             .headers
             .get("Accept-Encoding")
-            .map(|header_value| return header_value.contains("gzip"))
-            .is_some();
+            // .map(|header_value| return header_value.contains("gzip"))
+            .is_some_and(|header_value| header_value.contains("gzip"));
 
         if is_gzip_encoding {
             self.headers
