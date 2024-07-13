@@ -10,7 +10,7 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-use anyhow::bail;
+use flate2::{write::GzEncoder, Compression, GzBuilder};
 use itertools::{izip, Itertools};
 
 pub struct Server {
@@ -51,6 +51,7 @@ impl Server {
 
         for stream in listener.incoming() {
             let routes = Arc::new(Mutex::new(self.routes.clone()));
+
             thread::spawn(move || {
                 let routes = routes.lock().unwrap();
                 handle_connection(stream.unwrap(), routes).unwrap();
@@ -63,7 +64,6 @@ impl Server {
 
 fn handle_connection(mut stream: TcpStream, routes: MutexGuard<Vec<Route>>) -> anyhow::Result<()> {
     let request = Request::new(&mut stream)?;
-    println!("handle connection");
 
     let matched_request = routes.iter().fold_while(None, |_, route| {
         if let Some(matched_request) = request.match_route(route) {
@@ -73,8 +73,6 @@ fn handle_connection(mut stream: TcpStream, routes: MutexGuard<Vec<Route>>) -> a
         return itertools::FoldWhile::Continue(None);
     });
 
-    println!("matched headers");
-
     if let Some((route, matched_request)) = matched_request.into_inner() {
         let mut response = (route.responder)(matched_request);
         response.send(&mut stream, &request)?;
@@ -82,8 +80,6 @@ fn handle_connection(mut stream: TcpStream, routes: MutexGuard<Vec<Route>>) -> a
         let mut response = Response::new();
         response.send(&mut stream, &request)?;
     }
-
-    println!("response sent!");
 
     return Ok(());
 }
@@ -117,15 +113,9 @@ impl Request {
     pub fn new(stream: &mut TcpStream) -> anyhow::Result<Self> {
         let mut buffer = [0u8; 2048];
 
-        println!("got buffer");
-
         let length = stream.read(&mut buffer)?;
 
-        println!("got length {length}");
-
         let raw_data = String::from_utf8_lossy(&buffer[..length]);
-
-        println!("raw data: {raw_data}");
 
         let mut request_data = raw_data.lines();
 
@@ -150,8 +140,6 @@ impl Request {
         }
 
         let request_body = request_data.next().map(|body| body.to_owned());
-
-        // reader.consume(raw_data.len());
 
         return Ok(Self {
             method: method.to_string(),
@@ -322,6 +310,19 @@ impl Response {
         if is_gzip_encoding {
             self.headers
                 .insert("Content-Encoding".to_string(), "gzip".to_string());
+
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+
+            let Some(body) = &self.body else {
+                stream.write_all(format!("{self}").as_bytes())?;
+                return Ok(());
+            };
+
+            encoder.write_all(body.as_bytes())?;
+            let compressed_data = encoder.finish()?;
+            let compressed_data = String::from_utf8_lossy(&compressed_data).to_string();
+
+            self.body = Some(compressed_data);
         };
 
         stream.write_all(format!("{self}").as_bytes())?;
