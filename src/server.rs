@@ -308,6 +308,21 @@ impl Response {
             format!("HTTP/1.1 {} {}\r\n", self.status_code, self.status_verb).as_bytes(),
         );
 
+        let parsed_body = self.body.as_ref().map(|body| match is_gzip_encoding {
+            true => {
+                let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                encoder.write_all(body.as_bytes()).unwrap();
+                let compressed_data = encoder.finish().unwrap();
+                return compressed_data;
+            }
+            false => return body.clone().into_bytes(),
+        });
+
+        if let Some(body) = parsed_body.clone() {
+            self.headers
+                .insert("Content-Length".to_string(), body.len().to_string());
+        };
+
         if self.headers.len() > 0 {
             self.headers.iter().for_each(|header| {
                 response.extend_from_slice(format!("{}: {}\r\n", header.0, header.1).as_bytes())
@@ -316,19 +331,8 @@ impl Response {
             response.extend_from_slice("\r\n".as_bytes());
         }
 
-        if let Some(body) = &self.body {
-            match is_gzip_encoding {
-                true => {
-                    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-                    encoder.write_all(body.as_bytes())?;
-
-                    let compressed_data = encoder.finish()?;
-                    response.extend_from_slice(&compressed_data);
-                }
-                false => {
-                    response.extend_from_slice(body.as_bytes());
-                }
-            }
+        if let Some(body) = parsed_body {
+            response.extend_from_slice(&body.clone())
         }
 
         response.extend_from_slice("\r\n".as_bytes());
