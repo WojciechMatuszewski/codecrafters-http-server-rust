@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashMap;
+use std::{collections::HashMap, thread};
 #[allow(unused, dead_code)]
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -44,29 +44,37 @@ impl Server {
     pub fn run(&self) -> anyhow::Result<()> {
         let listener = TcpListener::bind(self.address.clone())?;
         for stream in listener.incoming() {
-            let mut stream = stream?;
-
-            let request = Request::new(&stream)?;
-
-            let matched_request = self.routes.iter().fold_while(None, |_, route| {
-                if let Some(matched_request) = request.match_route(route) {
-                    return itertools::FoldWhile::Done(Some((route, matched_request)));
-                }
-
-                return itertools::FoldWhile::Continue(None);
-            });
-
-            if let Some((route, matched_request)) = matched_request.into_inner() {
-                let mut response = (route.responder)(matched_request);
-                response.send(&mut stream, &request)?;
-            } else {
-                let mut response = Response::new();
-                response.send(&mut stream, &request)?;
-            }
+            thread::scope(|s| {
+                s.spawn(|| {
+                    handle_connection(stream.unwrap(), &self.routes).unwrap();
+                });
+            })
         }
 
         return Ok(());
     }
+}
+
+fn handle_connection(mut stream: TcpStream, routes: &Vec<Route>) -> anyhow::Result<()> {
+    let request = Request::new(&stream)?;
+
+    let matched_request = routes.iter().fold_while(None, |_, route| {
+        if let Some(matched_request) = request.match_route(route) {
+            return itertools::FoldWhile::Done(Some((route, matched_request)));
+        }
+
+        return itertools::FoldWhile::Continue(None);
+    });
+
+    if let Some((route, matched_request)) = matched_request.into_inner() {
+        let mut response = (route.responder)(matched_request);
+        response.send(&mut stream, &request)?;
+    } else {
+        let mut response = Response::new();
+        response.send(&mut stream, &request)?;
+    }
+
+    return Ok(());
 }
 
 #[derive(Debug)]
@@ -274,7 +282,6 @@ impl Response {
         };
     }
 
-    #[allow(unused_variables)]
     pub fn send(&mut self, stream: &mut TcpStream, request: &Request) -> anyhow::Result<()> {
         let Some(encoding_header) = request.headers.get("Accept-Encoding") else {
             stream.write_all(format!("{self}").as_bytes())?;
