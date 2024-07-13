@@ -291,85 +291,49 @@ impl Response {
     }
 
     pub fn send(&mut self, stream: &mut TcpStream, request: &Request) -> anyhow::Result<()> {
-        let Some(encoding_header) = request.headers.get("Accept-Encoding") else {
-            stream.write_all(format!("{self}").as_bytes())?;
-            return Ok(());
-        };
-
-        let is_gzip_encoding = encoding_header
-            .split(",")
-            .fold_while(false, |_, value| {
-                if value.trim() == "gzip" {
-                    return itertools::FoldWhile::Done(true);
-                }
-
-                return itertools::FoldWhile::Continue(false);
-            })
-            .into_inner();
+        let is_gzip_encoding = request
+            .headers
+            .get("Accept-Encoding")
+            .map(|header_value| return header_value.contains("gzip"))
+            .is_some();
 
         if is_gzip_encoding {
             self.headers
                 .insert("Content-Encoding".to_string(), "gzip".to_string());
+        }
 
-            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        let mut response = format!("").into_bytes();
 
-            let Some(body) = &self.body else {
-                stream.write_all(format!("{self}").as_bytes())?;
-                return Ok(());
-            };
-
-            encoder.write_all(body.as_bytes())?;
-            let compressed_data = encoder.finish()?;
-            let compressed_data = String::from_utf8_lossy(&compressed_data).to_string();
-
-            self.body = Some(compressed_data);
-        };
-
-        stream.write_all(format!("{self}").as_bytes())?;
-        return Ok(());
-    }
-}
-
-impl fmt::Display for Response {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut response = String::new();
-
-        response
-            .push_str(format!("HTTP/1.1 {} {}\r\n", self.status_code, self.status_verb).as_str());
+        response.extend_from_slice(
+            format!("HTTP/1.1 {} {}\r\n", self.status_code, self.status_verb).as_bytes(),
+        );
 
         if self.headers.len() > 0 {
             self.headers.iter().for_each(|header| {
-                response.push_str(format!("{}: {}\r\n", header.0, header.1).as_str())
+                response.extend_from_slice(format!("{}: {}\r\n", header.0, header.1).as_bytes())
             });
 
-            response.push_str("\r\n");
+            response.extend_from_slice("\r\n".as_bytes());
         }
 
         if let Some(body) = &self.body {
-            response.push_str(body.as_str());
+            match is_gzip_encoding {
+                true => {
+                    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                    encoder.write_all(body.as_bytes())?;
+
+                    let compressed_data = encoder.finish()?;
+                    response.extend_from_slice(&compressed_data);
+                }
+                false => {
+                    response.extend_from_slice(body.as_bytes());
+                }
+            }
         }
 
-        response.push_str("\r\n");
+        response.extend_from_slice("\r\n".as_bytes());
+        stream.write_all(&response)?;
 
-        return f.write_str(response.as_str());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let response = Response::new();
-        // let parsed_response = format!("{}", response);
-        // let x = format!("{response}");
-        // for (index, ch) in x.chars().enumerate() {
-        //     if index == 1 {
-        //         println!("{}", ch);
-        //         break;
-        //     }
-        // }
-        print!("{:?}", format!("{response}"));
+        return Ok(());
     }
 }
