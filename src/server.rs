@@ -46,7 +46,7 @@ impl Server {
         for stream in listener.incoming() {
             thread::scope(|s| {
                 s.spawn(|| {
-                    handle_connection(stream.unwrap(), &self.routes).unwrap();
+                    handle_connection(&mut stream.unwrap(), &self.routes).unwrap();
                 });
             })
         }
@@ -55,7 +55,7 @@ impl Server {
     }
 }
 
-fn handle_connection(mut stream: TcpStream, routes: &Vec<Route>) -> anyhow::Result<()> {
+fn handle_connection(mut stream: &mut TcpStream, routes: &Vec<Route>) -> anyhow::Result<()> {
     let request = Request::new(&stream)?;
 
     let matched_request = routes.iter().fold_while(None, |_, route| {
@@ -328,7 +328,7 @@ impl fmt::Display for Response {
             response.push_str(body.as_str());
         }
 
-        response.push_str("\r\n");
+        // response.push_str("\r\n");
 
         return f.write_str(response.as_str());
     }
