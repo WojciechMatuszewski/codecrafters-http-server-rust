@@ -131,7 +131,7 @@ impl Request {
 
         let request_body = request_data.next().map(|body| body.to_owned());
 
-        reader.consume(raw_data.len());
+        // reader.consume(raw_data.len());
 
         return Ok(Self {
             method: method.to_string(),
@@ -304,7 +304,7 @@ impl Response {
                 .insert("Content-Encoding".to_string(), "gzip".to_string());
         };
 
-        stream.write_all(format!("{self}\r\n\r\n").as_bytes())?;
+        stream.write_all(format!("{self}").as_bytes())?;
         return Ok(());
     }
 }
@@ -328,7 +328,7 @@ impl fmt::Display for Response {
             response.push_str(body.as_str());
         }
 
-        // response.push_str("\r\n");
+        response.push_str("\r\n");
 
         return f.write_str(response.as_str());
     }
