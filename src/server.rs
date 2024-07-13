@@ -1,11 +1,16 @@
 use core::fmt;
-use std::{collections::HashMap, thread};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, MutexGuard},
+    thread,
+};
 #[allow(unused, dead_code)]
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
 };
 
+use anyhow::bail;
 use itertools::{izip, Itertools};
 
 pub struct Server {
@@ -43,20 +48,22 @@ impl Server {
 
     pub fn run(&self) -> anyhow::Result<()> {
         let listener = TcpListener::bind(self.address.clone())?;
+
         for stream in listener.incoming() {
-            thread::scope(|s| {
-                s.spawn(|| {
-                    handle_connection(&mut stream.unwrap(), &self.routes).unwrap();
-                });
-            })
+            let routes = Arc::new(Mutex::new(self.routes.clone()));
+            thread::spawn(move || {
+                let routes = routes.lock().unwrap();
+                handle_connection(stream.unwrap(), routes).unwrap();
+            });
         }
 
         return Ok(());
     }
 }
 
-fn handle_connection(mut stream: &mut TcpStream, routes: &Vec<Route>) -> anyhow::Result<()> {
-    let request = Request::new(&stream)?;
+fn handle_connection(mut stream: TcpStream, routes: MutexGuard<Vec<Route>>) -> anyhow::Result<()> {
+    let request = Request::new(&mut stream)?;
+    println!("handle connection");
 
     let matched_request = routes.iter().fold_while(None, |_, route| {
         if let Some(matched_request) = request.match_route(route) {
@@ -66,6 +73,8 @@ fn handle_connection(mut stream: &mut TcpStream, routes: &Vec<Route>) -> anyhow:
         return itertools::FoldWhile::Continue(None);
     });
 
+    println!("matched headers");
+
     if let Some((route, matched_request)) = matched_request.into_inner() {
         let mut response = (route.responder)(matched_request);
         response.send(&mut stream, &request)?;
@@ -74,10 +83,12 @@ fn handle_connection(mut stream: &mut TcpStream, routes: &Vec<Route>) -> anyhow:
         response.send(&mut stream, &request)?;
     }
 
+    println!("response sent!");
+
     return Ok(());
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Route {
     path: String,
     method: String,
@@ -103,9 +114,18 @@ pub struct MatchedRequest {
 }
 
 impl Request {
-    pub fn new(stream: &TcpStream) -> anyhow::Result<Self> {
-        let mut reader = BufReader::new(stream);
-        let raw_data = String::from_utf8(reader.fill_buf()?.to_vec())?;
+    pub fn new(stream: &mut TcpStream) -> anyhow::Result<Self> {
+        let mut buffer = [0u8; 2048];
+
+        println!("got buffer");
+
+        let length = stream.read(&mut buffer)?;
+
+        println!("got length {length}");
+
+        let raw_data = String::from_utf8_lossy(&buffer[..length]);
+
+        println!("raw data: {raw_data}");
 
         let mut request_data = raw_data.lines();
 
