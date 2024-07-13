@@ -304,7 +304,7 @@ impl Response {
                 .insert("Content-Encoding".to_string(), "gzip".to_string());
         };
 
-        stream.write_all(format!("{self}\r\n").as_bytes())?;
+        stream.write_all(format!("{self}\r\n\r\n").as_bytes())?;
         return Ok(());
     }
 }
